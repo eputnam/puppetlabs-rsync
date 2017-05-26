@@ -3,17 +3,20 @@
 # get files via rsync
 #
 # Parameters:
-#   $source        - source to copy from
-#   $path          - path to copy to, defaults to $name
-#   $user          - username on remote system
-#   $purge         - if set, rsync will use '--delete'
-#   $exlude        - string (or array) to be excluded
-#   $include       - string (or array) to be included
+#   $source  - source to copy from
+#   $path    - path to copy to, defaults to $name
+#   $user    - username on remote system
+#   $purge   - if set, rsync will use '--delete'
+#   $exlude  - string (or array) to be excluded
+#   $include - string (or array) to be included
 #   $exclude_first - if 'true' (default) then first exclude and then include; the other way around if 'false'
-#   $keyfile       - path to ssh key used to connect to remote host, defaults to /home/${user}/.ssh/id_rsa
-#   $timeout       - timeout in seconds, defaults to 900
-#   $options       - default options to pass to rsync (-a)
-#   $onlyif        - Condition to run the rsync command
+#   $keyfile - path to ssh key used to connect to remote host, defaults to /home/${user}/.ssh/id_rsa
+#   $timeout - timeout in seconds, defaults to 900
+#   $options - default options to pass to rsync (-a)
+#   $chown   - ownership to pass to rsync (optional; requires rsync 3.1.0+)
+#   $chmod   - permissions to pass to rsync (optional)
+#   $logfile - logname to pass to rsync (optional)
+#   $onlyif  - Condition to run the rsync command
 #
 # Actions:
 #   get files via rsync
@@ -38,14 +41,16 @@ define rsync::get (
   $hardlinks     = undef,
   $copylinks     = undef,
   $times         = undef,
-  $exclude       = undef,
   $include       = undef,
+  $exclude       = undef,
   $exclude_first = true,
   $keyfile       = undef,
   $timeout       = '900',
   $execuser      = 'root',
   $options       = '-a',
   $chown         = undef,
+  $chmod         = undef,
+  $logfile       = undef,
   $onlyif        = undef,
 ) {
 
@@ -56,76 +61,90 @@ define rsync::get (
   }
 
   if $user {
-    $myUser = "-e 'ssh -i ${mykeyfile} -l ${user}' ${user}@"
+    $myuser = "-e 'ssh -i ${mykeyfile} -l ${user}' ${user}@"
   } else {
-    $myUser = undef
+    $myuser = undef
   }
 
   if $purge {
-    $myPurge = '--delete'
+    $mypurge = '--delete'
   } else {
-    $myPurge = undef
+    $mypurge = undef
   }
 
   if $exclude {
-    $myExclude = join(prefix(flatten([$exclude]), '--exclude='), ' ')
+    $myexclude = join(prefix(flatten([$exclude]), '--exclude='), ' ')
   } else {
-    $myExclude = undef
+    $myexclude = undef
   }
 
   if $include {
-    $myInclude = join(prefix(flatten([$include]), '--include='), ' ')
+    $myinclude = join(prefix(flatten([$include]), '--include='), ' ')
   } else {
-    $myInclude = undef
+    $myinclude = undef
   }
 
   if $recursive {
-    $myRecursive = '-r'
+    $myrecursive = '-r'
   } else {
-    $myRecursive = undef
+    $myrecursive = undef
   }
 
   if $links {
-    $myLinks = '--links'
+    $mylinks = '--links'
   } else {
-    $myLinks = undef
+    $mylinks = undef
   }
 
   if $hardlinks {
-    $myHardLinks = '--hard-links'
+    $myhardlinks = '--hard-links'
   } else {
-    $myHardLinks = undef
+    $myhardlinks = undef
   }
 
   if $copylinks {
-    $myCopyLinks = '--copy-links'
+    $mycopylinks = '--copy-links'
   } else {
-    $myCopyLinks = undef
+    $mycopylinks = undef
   }
 
   if $times {
-    $myTimes = '--times'
+    $mytimes = '--times'
   } else {
-    $myTimes = undef
+    $mytimes = undef
   }
 
   if $chown {
-    $myChown = "--chown=${chown}"
+    $mychown = "--chown=${chown}"
   } else {
-    $myChown = undef
+    $mychown = undef
+  }
+
+  if $chmod {
+    $mychmod = "--chmod=${chmod}"
+  } else {
+    $mychmod = undef
+  }
+
+  if $logfile {
+    $mylogfile = "--log-file=${logfile}"
+  } else {
+    $mylogfile = undef
   }
 
   if $include or $exclude {
     if $exclude_first {
-      $excludeAndInclude = join(delete_undef_values([$myExclude, $myInclude]), ' ')
+      $excludeandinclude = join(delete_undef_values([$myexclude, $myinclude]), ' ')
     } else {
-      $excludeAndInclude = join(delete_undef_values([$myInclude, $myExclude]), ' ')
+      $excludeandinclude = join(delete_undef_values([$myinclude, $myexclude]), ' ')
     }
+  } else {
+    $excludeandinclude = undef
   }
 
   $rsync_options = join(
-    delete_undef_values([$options, $myPurge, $excludeAndInclude, $myLinks, $myHardLinks, $myCopyLinks, $myTimes,
-      $myRecursive, $myChown, "${myUser}${source}", $path]), ' ')
+    delete_undef_values([$options, $mypurge, $excludeandinclude, $mylinks, $myhardlinks, $mycopylinks, $mytimes,
+      $myrecursive, $mychown, $mychmod, $mylogfile, "${myuser}${source}", $path]), ' ')
 
   if !$onlyif {
     $onlyif_real = "test `rsync --dry-run --itemize-changes ${rsync_options} | wc -l` -gt 0"
